@@ -15,6 +15,7 @@ import { CartProvider } from "@/hooks/use-cart";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { LanguageProvider } from "@/hooks/use-language";
 import { AuthProvider } from "@/hooks/use-auth";
+import { WebSocketProvider } from "@/hooks/use-websocket-context";
 
 function Router() {
   return (
@@ -37,16 +38,20 @@ function App() {
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>
-            <CartProvider>
-              <div className="flex flex-col min-h-screen">
-                <Header />
-                <main className="flex-grow container-custom py-6">
-                  <Router />
-                </main>
-                <Footer />
-              </div>
-              <Toaster />
-            </CartProvider>
+            <WebSocketProvider 
+              showToasts={false} // Only show toasts in specific components that need them
+            >
+              <CartProvider>
+                <div className="flex flex-col min-h-screen">
+                  <Header />
+                  <main className="flex-grow container-custom py-6">
+                    <Router />
+                  </main>
+                  <Footer />
+                </div>
+                <Toaster />
+              </CartProvider>
+            </WebSocketProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

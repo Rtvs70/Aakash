@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMenuItems, useOrders, useTourismPlaces, useBulkSettings, useAdminUsers } from "@/hooks/use-api";
-import { useWebSocket } from "@/hooks/use-websocket";
+import { useWebSocketContext } from "@/hooks/use-websocket-context";
 import { MENU_CATEGORIES, TOURISM_TAGS, ORDER_STATUS_OPTIONS } from "@/config/constants";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";

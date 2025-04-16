@@ -555,11 +555,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         order: updatedOrder
       });
       
-      clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(notification);
-        }
-      });
+      // Create a safe broadcast function
+      const broadcast = (message: string) => {
+        wss.clients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            try {
+              client.send(message);
+            } catch (error) {
+              console.error('Error sending message to client:', error);
+              // Try to terminate the problematic connection
+              try {
+                client.terminate();
+              } catch (e) {
+                // If termination fails, just log it
+                console.error('Error terminating client connection:', e);
+              }
+            }
+          }
+        });
+      };
+      
+      // Send notification to all connected clients
+      broadcast(notification);
     }
     
     return updatedOrder;

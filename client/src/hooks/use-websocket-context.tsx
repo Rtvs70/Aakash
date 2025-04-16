@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Order } from '@/types';
 
@@ -9,7 +9,27 @@ type WebSocketEvent =
   | { type: 'new-order', order: Order }
   | { type: 'order-status-update', order: Order };
 
-interface UseWebSocketOptions {
+interface WebSocketContextType {
+  isConnected: boolean;
+  lastMessage: WebSocketEvent | null;
+  sendMessage: (data: any) => boolean;
+  reconnect: () => void;
+}
+
+// Create a context with a default value
+const WebSocketContext = createContext<WebSocketContextType>({
+  isConnected: false,
+  lastMessage: null,
+  sendMessage: () => false,
+  reconnect: () => {}
+});
+
+// Create a global variable to track if the provider is already mounted
+// This prevents multiple connections from different components
+let isProviderMounted = false;
+
+interface WebSocketProviderProps {
+  children: React.ReactNode;
   onNewOrder?: (order: Order) => void;
   onOrderStatusUpdate?: (order: Order) => void;
   onConnect?: () => void;
@@ -18,14 +38,15 @@ interface UseWebSocketOptions {
   showToasts?: boolean;
 }
 
-export function useWebSocket({
+export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
+  children,
   onNewOrder,
   onOrderStatusUpdate,
   onConnect,
   onDisconnect,
   autoReconnect = true,
   showToasts = true
-}: UseWebSocketOptions = {}) {
+}) => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketEvent | null>(null);
   const { toast } = useToast();
@@ -35,21 +56,25 @@ export function useWebSocket({
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef<number>(0);
   const isUnmountingRef = useRef<boolean>(false);
-  
-  // Store the last connection attempt timestamp
   const lastConnectionAttemptRef = useRef<number>(0);
   
   // Setup the socket connection
   const connectSocket = useCallback(() => {
+    // Global check to prevent multiple instances trying to connect
+    if (isProviderMounted && !socketRef.current) {
+      console.log('Another WebSocket provider is already handling connections');
+      return;
+    }
+    
     // Don't try to connect if component is unmounting or socket is already connecting/open
     if (isUnmountingRef.current) return;
     if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || 
                               socketRef.current.readyState === WebSocket.CONNECTING)) return;
     
     // Add rate limiting to prevent rapid connection attempts
-    // Skip if trying to connect too soon after the last attempt (min 2 seconds between attempts)
+    // Skip if trying to connect too soon after the last attempt (min 3 seconds between attempts)
     const now = Date.now();
-    if (now - lastConnectionAttemptRef.current < 2000) {
+    if (now - lastConnectionAttemptRef.current < 3000) {
       console.log('Skipping connection attempt - too soon after last attempt');
       return;
     }
@@ -242,10 +267,17 @@ export function useWebSocket({
   // Connect on mount, disconnect on unmount
   useEffect(() => {
     isUnmountingRef.current = false;
+    
+    // Set our global mounting state flag
+    isProviderMounted = true;
+    
     connectSocket();
     
     return () => {
       isUnmountingRef.current = true;
+      
+      // Reset our global mounting state flag
+      isProviderMounted = false;
       
       // Clear any reconnect timeout
       if (reconnectTimeoutRef.current) {
@@ -295,10 +327,25 @@ export function useWebSocket({
     connectSocket();
   }, [connectSocket]);
   
-  return {
+  const contextValue = {
     isConnected,
     lastMessage,
     sendMessage,
     reconnect
   };
-}
+  
+  return (
+    <WebSocketContext.Provider value={contextValue}>
+      {children}
+    </WebSocketContext.Provider>
+  );
+};
+
+// Hook to use the WebSocket context
+export const useWebSocketContext = () => {
+  const context = useContext(WebSocketContext);
+  if (context === undefined) {
+    throw new Error('useWebSocketContext must be used within a WebSocketProvider');
+  }
+  return context;
+};

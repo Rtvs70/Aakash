@@ -200,6 +200,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(orders);
   });
   
+  // API route for fetching new orders since a given timestamp (for PWA)
+  app.get("/api/orders/new", requireAuth, async (req, res) => {
+    try {
+      const sinceParam = req.query.since as string;
+      
+      if (!sinceParam) {
+        return res.status(400).json({ message: "Missing 'since' timestamp parameter" });
+      }
+      
+      let sinceDate: Date;
+      try {
+        sinceDate = new Date(sinceParam);
+        if (isNaN(sinceDate.getTime())) {
+          throw new Error("Invalid date");
+        }
+      } catch (err) {
+        return res.status(400).json({ message: "Invalid timestamp format" });
+      }
+      
+      // Get all orders and filter by timestamp
+      const allOrders = await storage.getOrders();
+      const newOrders = allOrders.filter(order => new Date(order.timestamp) > sinceDate);
+      
+      res.json(newOrders);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch new orders" });
+    }
+  });
+  
   app.get("/api/orders/:id", async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {

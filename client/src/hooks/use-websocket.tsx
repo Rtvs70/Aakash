@@ -30,29 +30,47 @@ export function useWebSocket({
   const [lastMessage, setLastMessage] = useState<WebSocketEvent | null>(null);
   const { toast } = useToast();
   
-  // Use ref to avoid issues with callback closures
+  // Use refs to avoid issues with callback closures
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const reconnectAttemptsRef = useRef<number>(0);
+  const isUnmountingRef = useRef<boolean>(false);
   
   // Setup the socket connection
   const connectSocket = useCallback(() => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) return;
+    // Don't try to connect if component is unmounting or socket is already connecting/open
+    if (isUnmountingRef.current) return;
+    if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || 
+                              socketRef.current.readyState === WebSocket.CONNECTING)) return;
     
     try {
       // Determine the correct protocol based on the current URL
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       
+      console.log('Attempting WebSocket connection to:', wsUrl);
+      
+      // Clean up any existing socket before creating a new one
+      if (socketRef.current) {
+        try {
+          socketRef.current.onclose = null; // Remove onclose handler to prevent recursive reconnection
+          socketRef.current.close();
+        } catch (e) {
+          // Ignore errors on socket closure
+        }
+      }
+      
       // Create new WebSocket connection
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
       
       socket.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('WebSocket connected successfully');
         setIsConnected(true);
+        reconnectAttemptsRef.current = 0; // Reset reconnect attempts on successful connection
         onConnect?.();
         
-        if (showToasts) {
+        if (showToasts && reconnectAttemptsRef.current > 0) {
           toast({
             title: 'Connected to server',
             description: 'You will receive real-time order notifications',
@@ -60,25 +78,37 @@ export function useWebSocket({
         }
       };
       
-      socket.onclose = () => {
-        console.log('WebSocket disconnected');
-        setIsConnected(false);
-        onDisconnect?.();
+      socket.onclose = (event) => {
+        console.log(`WebSocket disconnected with code: ${event.code}, reason: ${event.reason}`);
         
-        if (showToasts) {
-          toast({
-            title: 'Disconnected from server',
-            description: 'You won\'t receive real-time notifications',
-            variant: 'destructive',
-          });
-        }
-        
-        // Auto reconnect logic
-        if (autoReconnect && !reconnectTimeoutRef.current) {
-          reconnectTimeoutRef.current = window.setTimeout(() => {
-            reconnectTimeoutRef.current = null;
-            connectSocket();
-          }, 5000);
+        // Only update state and call handlers if the component is still mounted
+        if (!isUnmountingRef.current) {
+          setIsConnected(false);
+          onDisconnect?.();
+          
+          // Only show toast after multiple disconnections to avoid rapid flashing
+          if (showToasts && reconnectAttemptsRef.current > 2) {
+            toast({
+              title: 'Disconnected from server',
+              description: 'You won\'t receive real-time notifications',
+              variant: 'destructive',
+            });
+          }
+          
+          // Auto reconnect logic with exponential backoff
+          if (autoReconnect && !reconnectTimeoutRef.current && !isUnmountingRef.current) {
+            reconnectAttemptsRef.current += 1;
+            
+            // Calculate backoff delay: 1s, 2s, 4s, 8s, 16s, 30s (max)
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 30000);
+            
+            console.log(`Scheduling reconnect in ${delay}ms (attempt #${reconnectAttemptsRef.current})`);
+            
+            reconnectTimeoutRef.current = window.setTimeout(() => {
+              reconnectTimeoutRef.current = null;
+              if (!isUnmountingRef.current) connectSocket();
+            }, delay);
+          }
         }
       };
       
@@ -128,6 +158,11 @@ export function useWebSocket({
                 });
               }
               break;
+              
+            // Add handler for connection message to verify connection is good
+            case 'connection':
+              console.log('Connection confirmed by server:', data.message);
+              break;
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -136,7 +171,9 @@ export function useWebSocket({
       
       socket.onerror = (error) => {
         console.error('WebSocket error:', error);
-        if (showToasts) {
+        
+        // Only show error toast after multiple failures
+        if (showToasts && reconnectAttemptsRef.current > 2) {
           toast({
             title: 'Connection Error',
             description: 'Could not connect to notification service',
@@ -159,11 +196,39 @@ export function useWebSocket({
     return false;
   }, []);
   
+  // Handle visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Page is now visible, check connection status
+        if (socketRef.current?.readyState !== WebSocket.OPEN && 
+            socketRef.current?.readyState !== WebSocket.CONNECTING) {
+          console.log('Page became visible, checking WebSocket connection');
+          // Try to reconnect when page becomes visible and connection is not active
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+          }
+          connectSocket();
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [connectSocket]);
+  
   // Connect on mount, disconnect on unmount
   useEffect(() => {
+    isUnmountingRef.current = false;
     connectSocket();
     
     return () => {
+      isUnmountingRef.current = true;
+      
       // Clear any reconnect timeout
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -172,7 +237,18 @@ export function useWebSocket({
       
       // Close the socket
       if (socketRef.current) {
-        socketRef.current.close();
+        // Remove event handlers first to prevent reconnection attempts
+        socketRef.current.onclose = null;
+        socketRef.current.onerror = null;
+        socketRef.current.onmessage = null;
+        socketRef.current.onopen = null;
+        
+        // Close the socket if it's still open or connecting
+        if (socketRef.current.readyState === WebSocket.OPEN || 
+            socketRef.current.readyState === WebSocket.CONNECTING) {
+          socketRef.current.close();
+        }
+        
         socketRef.current = null;
       }
     };
@@ -180,7 +256,13 @@ export function useWebSocket({
   
   // Manual reconnect function
   const reconnect = useCallback(() => {
+    console.log('Manual reconnect requested');
+    
+    // Reset reconnect attempts to improve chance of successful connection
+    reconnectAttemptsRef.current = 0;
+    
     if (socketRef.current) {
+      socketRef.current.onclose = null; // Prevent auto-reconnect in onclose handler
       socketRef.current.close();
       socketRef.current = null;
     }
@@ -191,6 +273,7 @@ export function useWebSocket({
       reconnectTimeoutRef.current = null;
     }
     
+    // Try to connect immediately
     connectSocket();
   }, [connectSocket]);
   

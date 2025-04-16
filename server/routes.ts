@@ -388,19 +388,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
   // Set up WebSocket server for real-time notifications
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    // Add server-side features for more reliable connections
+    clientTracking: true,
+    perMessageDeflate: {
+      zlibDeflateOptions: {
+        chunkSize: 1024,
+        memLevel: 7,
+        level: 3
+      },
+      zlibInflateOptions: {
+        chunkSize: 10 * 1024
+      },
+      // Below options specified per WebSocket spec
+      serverNoContextTakeover: true, 
+      clientNoContextTakeover: true,
+      serverMaxWindowBits: 10,
+      concurrencyLimit: 10,
+      threshold: 1024 // Only compress messages larger than this
+    }
+  });
   
   // Store connected clients
   const clients = new Set<WebSocket>();
   
-  wss.on('connection', (ws) => {
+  // Ping function to keep connections alive
+  const pingClients = () => {
+    wss.clients.forEach((ws) => {
+      if ((ws as any).isAlive === false) {
+        // Client didn't respond to ping, terminate connection
+        console.log('WebSocket client timed out (no pong response)');
+        return ws.terminate();
+      }
+      
+      // Mark client as inactive until it responds to the next ping
+      (ws as any).isAlive = false;
+      
+      // Send ping
+      try {
+        ws.ping();
+      } catch (e) {
+        // Handle potential error when trying to ping
+        console.error('Error sending ping to client:', e);
+        ws.terminate();
+      }
+    });
+  };
+  
+  // Set up interval for ping-pong to keep connections alive
+  const pingInterval = setInterval(pingClients, 30000);
+  
+  // Clean up interval when server is shut down
+  wss.on('close', () => {
+    clearInterval(pingInterval);
+  });
+  
+  wss.on('connection', (ws, req) => {
     console.log('WebSocket client connected');
+    
+    // Set up ping-pong mechanism to detect dead connections
+    (ws as any).isAlive = true;
+    
+    // Handle pong messages (response to server pings)
+    ws.on('pong', () => {
+      (ws as any).isAlive = true;
+    });
     
     // Add client to the set
     clients.add(ws);
     
-    // Send initial message
-    ws.send(JSON.stringify({ type: 'connection', message: 'Connected to Rai Guest House WebSocket server' }));
+    // Send initial message with delay to ensure socket is fully established
+    setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ 
+            type: 'connection', 
+            message: 'Connected to Rai Guest House WebSocket server' 
+          }));
+        } catch (e) {
+          console.error('Error sending initial message:', e);
+        }
+      }
+    }, 100);
     
     // Handle messages from clients
     ws.on('message', (message) => {
@@ -409,15 +480,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Received message:', data);
         
         // Echo back to sender for testing
-        ws.send(JSON.stringify({ type: 'echo', data }));
+        if (ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify({ type: 'echo', data }));
+          } catch (e) {
+            console.error('Error sending echo response:', e);
+          }
+        }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
       }
     });
     
+    // Handle errors
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+      // Try to remove the client from the set
+      clients.delete(ws);
+    });
+    
     // Handle disconnection
-    ws.on('close', () => {
-      console.log('WebSocket client disconnected');
+    ws.on('close', (code, reason) => {
+      console.log(`WebSocket client disconnected with code: ${code}, reason: ${reason || 'No reason provided'}`);
       clients.delete(ws);
     });
   });
@@ -433,11 +517,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       order: newOrder
     });
     
-    clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(notification);
-      }
-    });
+    // Create a safe broadcast function
+    const broadcast = (message: string) => {
+      wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          try {
+            client.send(message);
+          } catch (error) {
+            console.error('Error sending message to client:', error);
+            // Try to terminate the problematic connection
+            try {
+              client.terminate();
+            } catch (e) {
+              // If termination fails, just log it
+              console.error('Error terminating client connection:', e);
+            }
+          }
+        }
+      });
+    };
+    
+    // Send notification to all connected clients
+    broadcast(notification);
     
     return newOrder;
   };

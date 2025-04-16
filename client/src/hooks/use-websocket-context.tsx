@@ -167,6 +167,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           // Handle different message types
           switch (data.type) {
             case 'new-order':
+              // Dispatch a custom event so components can listen for it directly
+              document.dispatchEvent(new CustomEvent('ws:new-order', { 
+                detail: data.order 
+              }));
+              
+              // Also call the callback if provided
               onNewOrder?.(data.order);
               
               // Only show new order notifications to admins
@@ -187,6 +193,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
               break;
               
             case 'order-status-update':
+              // Dispatch a custom event so components can listen for it directly
+              document.dispatchEvent(new CustomEvent('ws:order-status-update', { 
+                detail: data.order 
+              }));
+              
+              // Also call the callback if provided
               onOrderStatusUpdate?.(data.order);
               
               // For order status updates, check if it's their order
@@ -205,6 +217,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
             // Add handler for connection message to verify connection is good
             case 'connection':
               console.log('Connection confirmed by server:', data.message);
+              document.dispatchEvent(new CustomEvent('ws:connection', { 
+                detail: { message: data.message } 
+              }));
               break;
           }
         } catch (error) {

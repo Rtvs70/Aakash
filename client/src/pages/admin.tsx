@@ -297,11 +297,15 @@ export default function Admin() {
   const { toast } = useToast();
   
   // WebSocket for real-time order notifications
-  useWebSocket({
-    onNewOrder: (order) => {
+  const { isConnected: wsConnected } = useWebSocketContext();
+  
+  // Set up WebSocket event handlers
+  useEffect(() => {
+    // Define event handlers for WebSocket context
+    const handleNewOrder = (order: Order) => {
       toast({
         title: "New Order Received",
-        description: `Order #${order.id} from ${order.name} - Room ${order.roomNumber}`,
+        description: `Order #${order.id} from ${order.name || 'Guest'} - Room ${order.roomNumber}`,
         variant: "default",
       });
       
@@ -313,8 +317,9 @@ export default function Admin() {
       
       // Refresh orders list
       fetchOrders();
-    },
-    onOrderStatusUpdate: (order) => {
+    };
+    
+    const handleOrderStatusUpdate = (order: Order) => {
       toast({
         title: "Order Status Updated",
         description: `Order #${order.id} is now ${order.status}`,
@@ -322,10 +327,19 @@ export default function Admin() {
       
       // Refresh orders list
       fetchOrders();
-    },
-    showToasts: true,
-    autoReconnect: true
-  });
+    };
+    
+    // Register handlers with the WebSocket provider directly
+    // This is done using the WebSocket custom event system since we're now using a global context
+    document.addEventListener('ws:new-order', (e: any) => handleNewOrder(e.detail));
+    document.addEventListener('ws:order-status-update', (e: any) => handleOrderStatusUpdate(e.detail));
+    
+    // Clean up event listeners on unmount
+    return () => {
+      document.removeEventListener('ws:new-order', (e: any) => handleNewOrder(e.detail));
+      document.removeEventListener('ws:order-status-update', (e: any) => handleOrderStatusUpdate(e.detail));
+    };
+  }, [fetchOrders, orderAlertSound, toast]);
   
   // Forms
   const menuItemForm = useForm<z.infer<typeof menuItemSchema>>({

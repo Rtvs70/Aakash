@@ -1,0 +1,67 @@
+# WebSocket Connection Issue Fixes
+
+## Problem Overview
+The application was experiencing rapid WebSocket connection/disconnection cycles, causing performance issues and potential memory leaks. This was happening because:
+1. Multiple components were creating their own WebSocket connections
+2. There was no proper reconnection strategy with backoff
+3. Dead connections weren't being properly detected and cleaned up
+4. Error handling was insufficient
+
+## Solutions Implemented
+
+### 1. Centralized WebSocket Management
+- Created a new `WebSocketContext` provider that serves as a single source of truth for WebSocket connections
+- Implemented a global flag to prevent multiple connection attempts from different components
+- Added the provider to the root App component to ensure it's available throughout the application
+
+### 2. Connection Rate Limiting
+- Added timestamp tracking for connection attempts
+- Implemented a minimum delay between connection attempts (2-3 seconds)
+- Added logging to track connection lifecycle for debugging
+
+### 3. Exponential Backoff for Reconnection
+- Implemented progressive delays between reconnection attempts: 1s, 2s, 4s, 8s...
+- Added a maximum delay cap of 30 seconds to prevent excessive waiting
+- Reset reconnection counter on successful connections
+
+### 4. Enhanced Server-side Connection Management
+- Added proper ping/pong mechanism to detect dead connections
+- Implemented connection tracking with proper timeouts
+- Added graceful connection termination for problematic connections
+- Enhanced error handling with proper cleanup
+
+### 5. Improved Connection Lifecycle Management
+- Added proper cleanup of event handlers on component unmount
+- Implemented visibility change detection to reconnect when browser tab becomes active
+- Added connection state tracking with proper updates
+
+### 6. Custom Event System
+- Implemented a DOM-based event system for WebSocket messages
+- Allows components to listen for specific events without connecting directly
+- Reduces coupling between components and WebSocket implementation
+
+### 7. Safer Message Broadcasting
+- Added robust error handling for message broadcasts
+- Created a safe broadcast function that handles errors gracefully
+- Added connection state verification before sending messages
+
+## Technical Implementation Details
+
+### Client-side Changes
+- Created `use-websocket-context.tsx` with React Context API
+- Updated `App.tsx` to use the WebSocket provider at the root level
+- Updated `admin.tsx` to use the context and listen for custom events
+- Added internal flags to prevent reconnection loops
+
+### Server-side Changes
+- Enhanced WebSocket server initialization in `routes.ts` with better options
+- Added compression for efficient message transfer
+- Implemented server-side ping/pong mechanism
+- Added proper error handling for client connections
+
+## Results
+- Stable WebSocket connections without rapid connect/disconnect cycles
+- Better error recovery with exponential backoff
+- Reduced network traffic and server load
+- More consistent real-time updates
+- Improved user experience with reliable notifications

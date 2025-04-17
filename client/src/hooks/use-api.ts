@@ -105,10 +105,11 @@ export function useTourismPlaces() {
 
   const queryClient = useQueryClient();
 
+  const { post } = useAuthenticatedApi();
+  
   const { mutate: addTourismPlace } = useMutation({
     mutationFn: async (place: Omit<TourismPlace, "id">) => {
-      const res = await apiRequest("POST", "/api/tourism", place);
-      return res.json();
+      return post("/api/tourism", place);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tourism'] });
@@ -126,10 +127,12 @@ export function useTourismPlaces() {
     }
   });
 
+  // Get authenticated API for tourism
+  const { patch } = useAuthenticatedApi();
+
   const { mutate: updateTourismPlace } = useMutation({
     mutationFn: async ({ id, ...place }: TourismPlace) => {
-      const res = await apiRequest("PATCH", `/api/tourism/${id}`, place);
-      return res.json();
+      return patch(`/api/tourism/${id}`, place);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tourism'] });
@@ -149,7 +152,8 @@ export function useTourismPlaces() {
 
   const { mutate: deleteTourismPlace } = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/tourism/${id}`);
+      // Use the authenticated API
+      return patch(`/api/tourism/${id}/delete`, {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tourism'] });
@@ -291,6 +295,7 @@ export function useOrders(filterBy?: string) {
 // Admin Settings API
 export function useAdminSettings(key: string) {
   const { toast } = useToast();
+  const { post } = useAuthenticatedApi();
   
   const { 
     data: setting, 
@@ -304,8 +309,7 @@ export function useAdminSettings(key: string) {
 
   const { mutate: saveSetting } = useMutation({
     mutationFn: async (value: string) => {
-      const res = await apiRequest("POST", "/api/settings", { key, value });
-      return res.json();
+      return post("/api/settings", { key, value });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/settings/${key}`] });
@@ -334,13 +338,14 @@ export function useAdminSettings(key: string) {
 // Bulk Settings API
 export function useBulkSettings() {
   const { toast } = useToast();
+  const { post } = useAuthenticatedApi();
   
   const queryClient = useQueryClient();
 
   const saveMultipleSettings = async (settings: Record<string, string>) => {
     try {
       const promises = Object.entries(settings).map(([key, value]) => 
-        apiRequest("POST", "/api/settings", { key, value })
+        post("/api/settings", { key, value })
       );
       
       await Promise.all(promises);

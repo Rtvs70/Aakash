@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MenuItem, TourismPlace, Order, OrderItem, AdminUser, ActivityLog } from "@/types";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthenticatedApi } from "@/hooks/use-authenticated-api";
 
 // Menu Items API
 export function useMenuItems() {
@@ -370,6 +371,7 @@ export function useBulkSettings() {
 // Admin Users API
 export function useAdminUsers() {
   const { toast } = useToast();
+  const { post, get } = useAuthenticatedApi();
   
   const { 
     data: users = [], 
@@ -384,8 +386,6 @@ export function useAdminUsers() {
 
   const { mutate: addAdminUser } = useMutation({
     mutationFn: async (userData: { username: string; password: string; isAdmin: boolean; }) => {
-      // Import and use the authenticated API
-      const { post } = await import('@/hooks/use-authenticated-api').then(mod => mod.useAuthenticatedApi());
       return post("/api/users", userData);
     },
     onSuccess: () => {
@@ -406,8 +406,6 @@ export function useAdminUsers() {
 
   const { mutate: getActivityLogs } = useMutation({
     mutationFn: async () => {
-      // Import and use the authenticated API
-      const { get } = await import('@/hooks/use-authenticated-api').then(mod => mod.useAuthenticatedApi());
       return get("/api/activity-logs");
     },
     onSuccess: (data) => {

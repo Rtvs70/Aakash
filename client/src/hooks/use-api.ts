@@ -222,6 +222,9 @@ export function useOrders(filterBy?: string) {
     }
   });
 
+  // Get the authenticated API functions upfront, not inside the mutation function
+  const { patch } = useAuthenticatedApi();
+
   const { mutate: updateOrderStatus } = useMutation({
     mutationFn: async ({ 
       id, 
@@ -239,8 +242,7 @@ export function useOrders(filterBy?: string) {
       if (settled !== undefined) updates.settled = settled;
       if (restaurantPaid !== undefined) updates.restaurantPaid = restaurantPaid;
       
-      // Import and use the authenticated API
-      const { patch } = await import('@/hooks/use-authenticated-api').then(mod => mod.useAuthenticatedApi());
+      // Use the authenticated API that we got outside the mutation
       return patch(`/api/orders/${id}/status`, updates);
     },
     onSuccess: () => {

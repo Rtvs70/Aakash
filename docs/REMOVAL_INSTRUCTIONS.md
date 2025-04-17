@@ -1,210 +1,113 @@
 # Removing Replit Dependencies
 
-This document provides step-by-step instructions on how to remove Replit-specific dependencies from your project for deployment on any platform.
+This guide details the process of removing Replit-specific dependencies from the Rai Guest House Management System to ensure it can run independently on any platform.
 
-## Automated Removal
+## What Dependencies Were Removed
 
-The project includes a script that automates the process of removing Replit dependencies and preparing the project for external deployment:
+The following Replit-specific dependencies have been removed:
+
+1. `@replit/vite-plugin-shadcn-theme-json` - Used for theme customization
+2. `@replit/vite-plugin-runtime-error-modal` - Used for displaying runtime errors
+3. `@replit/vite-plugin-cartographer` - Used for Replit-specific source mapping
+
+## Custom Replacements Created
+
+For each removed dependency, a custom implementation has been created:
+
+### Theme Handling (`@replit/vite-plugin-shadcn-theme-json`)
+
+- Created `client/src/contexts/ThemeContext.tsx`
+- Provides identical theme functionality:
+  - Light/dark mode toggle
+  - Theme color customization
+  - Theme persistence
+  - System theme detection
+  - Border radius control
+
+### Error Handling (`@replit/vite-plugin-runtime-error-modal`)
+
+- Created `client/src/utils/errorHandler.ts`
+- Provides similar error handling capabilities:
+  - Error capturing and display
+  - Stack trace information
+  - Error dismissal
+  - Page reload option
+  - Styling consistent with the original implementation
+
+## Configuration Changes
+
+### Vite Configuration
+
+The Replit-specific Vite configuration has been replaced with a portable version that:
+
+1. Maintains all path aliases (@, @shared, @assets)
+2. Keeps the same build output structure
+3. Preserves all React-related settings
+4. Removes any Replit-specific plugins and features
+
+The portable configuration is available at `vite.config.portable.ts` and can be renamed to `vite.config.ts` when deploying outside Replit.
+
+### Environment Variables
+
+A portable `.env` file template has been created that:
+
+1. Contains all necessary environment variables
+2. Uses standard Node.js environment variable naming
+3. Is compatible with all platforms
+4. Includes clear documentation for each variable
+
+## Startup Scripts
+
+Platform-specific startup scripts have been created:
+
+1. `scripts/start.sh` for Linux/macOS
+2. `scripts/start.bat` for Windows
+
+These scripts:
+- Check for prerequisites (Node.js)
+- Verify and create the .env file if needed
+- Install dependencies if necessary
+- Start the application in either development or production mode
+
+## How to Use the Portable Version
+
+Run the `scripts/make-portable.js` script to prepare the project for deployment on any platform:
 
 ```bash
-# On Linux/Mac
-node scripts/prepare-for-external.js
-
-# On Windows
-node scripts\prepare-for-external.js
+node scripts/make-portable.js
 ```
 
-This script will:
-1. Backup the original Vite configuration
-2. Create a new Vite config without Replit dependencies
-3. Set up environment variables
-4. Add custom theme handling
-5. Add custom error handling
-6. Create platform-specific startup scripts
+This will:
+1. Create the portable Vite configuration
+2. Generate the custom theme and error handling utilities
+3. Set up the .env file
+4. Create the startup scripts
 
-## Manual Removal Process
+See `docs/PORTABLE_SETUP.md` for detailed instructions on using the portable version.
 
-If you prefer to remove Replit dependencies manually, follow these steps:
+## Testing Independence
 
-### 1. Remove Replit-specific packages
+To verify the application works independently:
 
-```bash
-npm uninstall @replit/vite-plugin-cartographer @replit/vite-plugin-runtime-error-modal @replit/vite-plugin-shadcn-theme-json
-```
+1. Run the `make-portable.js` script
+2. Rename `vite.config.portable.ts` to `vite.config.ts`
+3. Start the application using the provided scripts
+4. Verify all features work without any Replit-specific functionality
 
-### 2. Replace Vite Configuration
+## Implementation Details
 
-Create a new `vite.config.ts` file:
+### ThemeContext.tsx
 
-```typescript
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import path from "path";
+The custom theme implementation uses React's Context API to:
+- Store theme preferences
+- Apply theme settings to the document
+- Persist theme choices in localStorage
+- Detect and apply system preferences
 
-export default defineConfig({
-  plugins: [
-    react(),
-  ],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "client", "src"),
-      "@shared": path.resolve(__dirname, "shared"),
-      "@assets": path.resolve(__dirname, "attached_assets"),
-    },
-  },
-  root: path.resolve(__dirname, "client"),
-  build: {
-    outDir: path.resolve(__dirname, "dist/public"),
-    emptyOutDir: true,
-  },
-});
-```
+### errorHandler.ts
 
-### 3. Setup Environment Variables
-
-Install dotenv:
-
-```bash
-npm install dotenv
-```
-
-Create a `.env` file based on the provided `.env.example`:
-
-```
-# Server Configuration
-PORT=5000
-NODE_ENV=development
-SESSION_SECRET=your_secure_session_secret
-
-# Google Sheets API (if using)
-VITE_GOOGLE_API_KEY=your_google_api_key
-VITE_MENU_SPREADSHEET_ID=your_menu_spreadsheet_id
-VITE_TOURISM_SPREADSHEET_ID=your_tourism_spreadsheet_id
-VITE_ORDERS_SPREADSHEET_ID=your_orders_spreadsheet_id
-```
-
-### 4. Update Server Code
-
-Update `server/index.ts` to use environment variables:
-
-```typescript
-import dotenv from "dotenv";
-import path from "path";
-
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(import.meta.dirname, "..", ".env") });
-```
-
-### 5. Implement Custom Theme Handling
-
-Create `client/src/contexts/ThemeContext.tsx` as described in `docs/THEME_HANDLER.md`.
-
-### 6. Implement Custom Error Handling
-
-Create `client/src/utils/errorHandler.ts` as described in `docs/ERROR_HANDLING.md`.
-
-### 7. Update Main Entry Point
-
-Update `client/src/main.tsx` to use the new context providers:
-
-```tsx
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import './index.css';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from './lib/queryClient';
-import { setupErrorHandlers } from './utils/errorHandler';
-
-// Setup runtime error handlers
-setupErrorHandlers();
-
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>
-    </QueryClientProvider>
-  </React.StrictMode>
-);
-```
-
-## Additional Platform-Specific Setup
-
-### Linux/Mac Setup
-
-1. Make the start script executable:
-   ```bash
-   chmod +x scripts/start.sh
-   ```
-
-2. Run the application:
-   ```bash
-   ./scripts/start.sh
-   ```
-
-### Windows Setup
-
-Run the application using the Windows script:
-```
-scripts\start.bat
-```
-
-## Using Docker (Optional)
-
-Create a `Dockerfile` in the root directory:
-
-```dockerfile
-FROM node:16-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
-COPY . .
-RUN npm run build
-
-EXPOSE 5000
-
-CMD ["node", "dist/index.js"]
-```
-
-Build and run with Docker:
-```bash
-docker build -t rai-guest-house .
-docker run -p 5000:5000 -e NODE_ENV=production -e SESSION_SECRET=your_secret -e PORT=5000 rai-guest-house
-```
-
-## Troubleshooting
-
-### Missing Dependencies
-If you encounter errors about missing dependencies, try:
-```bash
-npm install
-```
-
-### Vite Configuration Errors
-If you get Vite configuration errors, make sure your updated configuration doesn't reference any Replit plugins.
-
-### Environment Variable Issues
-Make sure your `.env` file contains all required environment variables as listed in `.env.example`.
-
-## Verification
-
-After removing the dependencies, verify that your application works as expected:
-
-1. The website loads correctly
-2. The theme functions properly (light/dark mode)
-3. Error handling works
-4. API requests work correctly
-5. All features work as expected
-
-## Additional Resources
-
-- See `docs/DEPLOYMENT.md` for detailed deployment instructions
-- See `docs/DOTENV_SETUP.md` for more information on environment variables
-- See `docs/THEME_HANDLER.md` for theme handling details
-- See `docs/ERROR_HANDLING.md` for error handling implementation
+The custom error handler:
+- Captures runtime errors and unhandled promise rejections
+- Creates a visually consistent error modal
+- Provides debug information
+- Offers error recovery options

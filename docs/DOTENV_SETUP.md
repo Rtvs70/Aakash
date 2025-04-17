@@ -1,188 +1,107 @@
-# Environment Variables Setup Guide
+# Environment Variables Guide
 
-This guide explains how to set up environment variables to replace Replit-specific functionality.
+This document explains how to set up and use environment variables for the Rai Guest House Management System when running the application outside of Replit.
 
-## Overview
+## Environment Variables Used
 
-Replit automatically provides environment variables and secrets management. To make the project portable, we need to implement our own environment variables solution using `dotenv`.
+The application uses the following environment variables:
 
-## Creating Environment Files
+| Variable | Purpose | Required | Default |
+|----------|---------|:--------:|:-------:|
+| `PORT` | Port for the Express server | No | 5000 |
+| `NODE_ENV` | Environment (development/production) | No | development |
+| `SESSION_SECRET` | Secret for session encryption | Yes | - |
+| `VITE_GOOGLE_API_KEY` | Google API key for Sheets API | Yes | - |
+| `VITE_ORDERS_SPREADSHEET_ID` | Google Sheet ID for orders | Yes | - |
+| `VITE_MENU_SPREADSHEET_ID` | Google Sheet ID for menu items | Yes | - |
+| `VITE_TOURISM_SPREADSHEET_ID` | Google Sheet ID for tourism places | Yes | - |
 
-1. Create a `.env` file in the root directory of your project. This file will be used for local development.
-2. Create a `.env.example` file to serve as a template for other developers (without actual secret values).
+## Setting Up Environment Variables
 
-## Example .env File Structure
+### Local Development
 
-Here's what your `.env` file should look like:
+1. Create a `.env` file in the project root (if it doesn't exist already)
+2. Add your environment variables:
 
 ```
-# Server Configuration
 PORT=5000
 NODE_ENV=development
-SESSION_SECRET=your_strong_random_secret_key
+SESSION_SECRET=your_session_secret_here
 
-# Database Configuration (if using PostgreSQL)
-DATABASE_URL=postgresql://username:password@localhost:5432/database_name
-
-# Google Sheets API (if using)
+# Google API keys and spreadsheet IDs
 VITE_GOOGLE_API_KEY=your_google_api_key
+VITE_ORDERS_SPREADSHEET_ID=your_orders_spreadsheet_id
 VITE_MENU_SPREADSHEET_ID=your_menu_spreadsheet_id
 VITE_TOURISM_SPREADSHEET_ID=your_tourism_spreadsheet_id
-VITE_ORDERS_SPREADSHEET_ID=your_orders_spreadsheet_id
-
-# Other Application Settings
-PUBLIC_URL=http://localhost:5000
 ```
 
-## Using Environment Variables
+### Production Deployment
+
+For production environments, you should set environment variables according to your hosting provider's recommendations:
+
+- **Node.js hosting**: Set environment variables through the hosting dashboard
+- **Docker**: Use environment variables in your Dockerfile or docker-compose.yml
+- **Traditional hosting**: Configure environment variables in your server setup
+
+## Obtaining Required Values
+
+### Google API Key
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project (or select an existing one)
+3. Navigate to APIs & Services > Credentials
+4. Create an API key
+5. Enable the Google Sheets API for your project
+
+### Google Spreadsheet IDs
+
+The spreadsheet ID is the value between `/d/` and `/edit` in the Google Sheets URL.
+
+For example, in the URL:
+```
+https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+```
+
+The spreadsheet ID is: `1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms`
+
+## Accessing Environment Variables
 
 ### In Server Code (Node.js)
 
-Update `server/index.ts` to load environment variables:
-
-```typescript
-import express from "express";
-import dotenv from "dotenv";
-import path from "path";
-
-// Load environment variables from .env file
-dotenv.config({ path: path.resolve(import.meta.dirname, "..", ".env") });
-
-// Now you can access environment variables
-const PORT = process.env.PORT || 5000;
-const NODE_ENV = process.env.NODE_ENV || "development";
-const SESSION_SECRET = process.env.SESSION_SECRET || "default_secret_not_for_production";
-
-// Continue with server setup
-const app = express();
-// ...
+```javascript
+// Access using process.env
+const port = process.env.PORT || 5000;
+const sessionSecret = process.env.SESSION_SECRET;
 ```
 
-### In Client Code (Vite)
+### In Client Code (React)
 
-Vite automatically loads environment variables prefixed with `VITE_` from your `.env` file.
+Variables that need to be accessible in the browser must be prefixed with `VITE_`:
 
-Example usage in a React component:
-
-```tsx
-function GoogleMapsComponent() {
-  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-  
-  return (
-    <div>
-      {apiKey ? (
-        <GoogleMap apiKey={apiKey} />
-      ) : (
-        <div className="error-message">
-          Google Maps API key is missing. Please set VITE_GOOGLE_API_KEY in your environment.
-        </div>
-      )}
-    </div>
-  );
-}
+```javascript
+// Access using import.meta.env
+const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+const menuSpreadsheetId = import.meta.env.VITE_MENU_SPREADSHEET_ID;
 ```
 
-## Handling Different Environments
+## Troubleshooting
 
-For different environments (development, testing, production), you can create multiple .env files:
+### Environment Variables Not Available in Client
 
-- `.env.development` - Used when NODE_ENV=development
-- `.env.test` - Used when NODE_ENV=test
-- `.env.production` - Used when NODE_ENV=production
+- Make sure they are prefixed with `VITE_`
+- Restart the development server after changing .env files
+- Verify the values are correctly set in your .env file
 
-## Securing Environment Variables
+### Server Can't Read Environment Variables
 
-1. **NEVER commit .env files to version control**
-   - Add `.env*` to your `.gitignore` file
-   - Only commit the `.env.example` template
+- Check that the .env file is in the project root
+- Ensure there are no syntax errors in your .env file
+- Verify that the application is loading the .env file correctly
 
-2. **Handling secrets in production**
-   - For cloud platforms, use their built-in secrets/environment variables management
-   - For self-hosted scenarios, ensure proper file permissions on .env files
+## Security Best Practices
 
-## Migrating from Replit Secrets
-
-If you were using Replit Secrets:
-
-1. Retrieve all current secrets from Replit
-2. Add them to your new `.env` file
-3. Update any code that accessed `process.env.REPL_` variables
-
-## Environment Variables for Deployment
-
-Different deployment platforms handle environment variables differently:
-
-### Vercel
-```
-# Set through Vercel UI or using vercel.json
-{
-  "env": {
-    "SESSION_SECRET": "your-secret-value"
-  }
-}
-```
-
-### Netlify
-```
-# Set through Netlify UI or netlify.toml
-[build.environment]
-  SESSION_SECRET = "your-secret-value"
-```
-
-### Docker
-```
-# Pass as environment variables when running container
-docker run -e SESSION_SECRET=your-secret-value your-image
-```
-
-## Checking for Required Variables
-
-Add a validation function to ensure all required environment variables are present:
-
-```typescript
-function validateEnv() {
-  const required = [
-    'SESSION_SECRET',
-    'VITE_GOOGLE_API_KEY',
-    // Add other required variables
-  ];
-  
-  const missing = required.filter(key => !process.env[key]);
-  
-  if (missing.length > 0) {
-    console.error(`Missing required environment variables: ${missing.join(', ')}`);
-    console.error('Please add them to your .env file or environment');
-    
-    // In development, just warn; in production, exit
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    }
-  }
-}
-
-// Call this function early in your application startup
-validateEnv();
-```
-
-## Example .env.example File
-
-```
-# Server Configuration
-PORT=5000
-NODE_ENV=development
-SESSION_SECRET=your_secret_key_here
-
-# Database Configuration
-DATABASE_URL=postgresql://username:password@host:port/database
-
-# Google Sheets API
-VITE_GOOGLE_API_KEY=your_google_api_key_here
-VITE_MENU_SPREADSHEET_ID=your_menu_spreadsheet_id_here
-VITE_TOURISM_SPREADSHEET_ID=your_tourism_spreadsheet_id_here
-VITE_ORDERS_SPREADSHEET_ID=your_orders_spreadsheet_id_here
-
-# Other Settings
-PUBLIC_URL=http://localhost:5000
-```
-
-This setup ensures your application can run in any environment without relying on Replit-specific features.
+1. **Never commit** your .env file to version control
+2. Use different environment variable values for development and production
+3. Regularly rotate secrets and API keys
+4. Use least-privilege access for API keys (restrict to only the APIs needed)
+5. Consider using a secure environment variable management service for production

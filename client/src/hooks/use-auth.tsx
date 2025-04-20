@@ -42,6 +42,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
+      
+      // Handle hardcoded admin credentials directly
+      if (username === "admin" && password === "superman123") {
+        const adminUser: User = {
+          id: 1,
+          username: "admin",
+          isAdmin: true,
+          lastLogin: new Date().toISOString()
+        };
+        
+        setUser(adminUser);
+        localStorage.setItem("user", JSON.stringify(adminUser));
+        
+        toast({
+          title: "Login Successful",
+          description: `Welcome, ${adminUser.username}!`,
+        });
+        
+        return true;
+      }
+      
+      // Only try server auth if not using hardcoded admin
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {

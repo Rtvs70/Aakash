@@ -105,11 +105,12 @@ export function useTourismPlaces() {
 
   const queryClient = useQueryClient();
 
-  const { post } = useAuthenticatedApi();
-  
+  // Get authenticated API for all tourism operations
+  const authApi = useAuthenticatedApi();
+
   const { mutate: addTourismPlace } = useMutation({
     mutationFn: async (place: Omit<TourismPlace, "id">) => {
-      return post("/api/tourism", place);
+      return authApi.post("/api/tourism", place);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tourism'] });
@@ -126,9 +127,6 @@ export function useTourismPlaces() {
       });
     }
   });
-
-  // Get authenticated API for tourism
-  const { patch } = useAuthenticatedApi();
 
   const { mutate: updateTourismPlace } = useMutation({
     mutationFn: async ({ id, ...place }: TourismPlace) => {

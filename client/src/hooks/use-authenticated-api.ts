@@ -18,6 +18,7 @@ export function useAuthenticatedApi() {
     const headers: Record<string, string> = {
       ...(options.headers || {}),
       "X-User-ID": String(user.id),
+      "Authorization": `Bearer ${user.id}`,
     };
 
     if (options.body && typeof options.body !== "string" && !(options.body instanceof FormData)) {

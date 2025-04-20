@@ -15,20 +15,43 @@ import { z } from "zod";
 // Middleware to verify admin authentication
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   const userId = req.header('X-User-ID');
+  const authHeader = req.header('Authorization');
   
-  if (!userId) {
+  // Check for userId in header (and allow token-based auth as fallback)
+  if (!userId && !authHeader) {
     return res.status(401).json({ message: "Authentication required" });
   }
   
-  const parsedUserId = parseInt(userId);
-  if (isNaN(parsedUserId)) {
-    return res.status(400).json({ message: "Invalid user ID" });
+  // If user ID provided directly
+  if (userId) {
+    const parsedUserId = parseInt(userId);
+    if (isNaN(parsedUserId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+    
+    // Add userId to request for use in activity logging
+    (req as any).userId = parsedUserId;
+    next();
+    return;
   }
-
-  // Add userId to request for use in activity logging
-  (req as any).userId = parsedUserId;
   
-  next();
+  // Check bearer token if no direct user ID
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const parsedUserId = parseInt(token);
+    
+    if (isNaN(parsedUserId)) {
+      return res.status(400).json({ message: "Invalid authorization token" });
+    }
+    
+    // Add userId to request for use in activity logging
+    (req as any).userId = parsedUserId;
+    next();
+    return;
+  }
+  
+  // If we reach here, authorization was insufficient
+  return res.status(401).json({ message: "Invalid authentication credentials" });
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -345,6 +368,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Add a PATCH endpoint for tourism place deletion to make it work with our API
+  app.patch("/api/tourism/:id/delete", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
+    
+    const success = await storage.deleteTourismPlace(id);
+    if (!success) {
+      return res.status(404).json({ message: "Tourism place not found" });
+    }
+    
+    res.status(200).json({ success: true, message: "Tourism place deleted successfully" });
+  });
+
+  // Keep the DELETE endpoint for traditional REST clients
   app.delete("/api/tourism/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -371,10 +410,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(setting);
   });
   
-  app.post("/api/settings", async (req, res) => {
+  app.post("/api/settings", requireAuth, async (req, res) => {
     try {
       const settingData = insertAdminSettingSchema.parse(req.body);
       const newSetting = await storage.setAdminSetting(settingData);
+      
+      // Log the activity
+      if ((req as any).userId) {
+        await storage.logActivity({
+          userId: (req as any).userId,
+          action: "UPDATE_SETTING",
+          details: `Updated setting: ${settingData.key}`
+        });
+      }
+      
       res.status(201).json(newSetting);
     } catch (error) {
       if (error instanceof z.ZodError) {

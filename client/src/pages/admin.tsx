@@ -157,7 +157,7 @@ function OrderRow({ order, onStatusChange }: OrderRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
   return (
-    <React.Fragment>
+    <>
       <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => setIsExpanded(!isExpanded)}>
         <TableCell>{order.id}</TableCell>
         <TableCell>{formatDate(order.timestamp)}</TableCell>
@@ -223,7 +223,7 @@ function OrderRow({ order, onStatusChange }: OrderRowProps) {
           </TableCell>
         </TableRow>
       )}
-    </React.Fragment>
+    </>
   );
 }
 

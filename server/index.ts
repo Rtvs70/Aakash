@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { loadLastSyncStatus, scheduleNightlyOrderSync } from "./orderSyncScheduler";
+import { storage } from "./storage";
 
 const app = express();
 app.use(express.json());
@@ -60,11 +62,22 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  server.listen(port, "localhost", async () => {
     log(`serving on port ${port}`);
+    
+    // Load the last order sync status from storage
+    await loadLastSyncStatus();
+    
+    // Get spreadsheet configuration from storage
+    const ordersSpreadsheetIdSetting = await storage.getAdminSetting("ordersSpreadsheetId");
+    const ordersSheetIdSetting = await storage.getAdminSetting("ordersSheetId");
+    
+    const ordersSpreadsheetId = ordersSpreadsheetIdSetting?.value || process.env.VITE_ORDERS_SPREADSHEET_ID || "1RzPVjVA635R8GgjKSsvTLW2tC-FpVB0JdwVpp7ffVys";
+    const ordersSheetId = ordersSheetIdSetting?.value || "0";
+    
+    // Schedule nightly order sync at 1:00 AM
+    scheduleNightlyOrderSync(ordersSpreadsheetId, ordersSheetId);
+    
+    log("Order sync scheduler initialized");
   });
 })();

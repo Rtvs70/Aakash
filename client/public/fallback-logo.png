@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200">
+  <rect width="300" height="200" fill="#f8f9fa" />
+  <g transform="translate(75, 50)">
+    <path d="M75,0 L150,75 L75,150 L0,75 Z" fill="#e63946" />
+    <path d="M37.5,37.5 L112.5,37.5 L112.5,112.5 L37.5,112.5 Z" fill="#f1faee" />
+    <circle cx="75" cy="75" r="25" fill="#a8dadc" />
+  </g>
+  <text x="150" y="170" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#1d3557">Rai Guest House</text>
+</svg>

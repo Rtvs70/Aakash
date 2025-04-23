@@ -27,5 +27,13 @@ export const TOURISM_TAGS = [
 export const ORDER_STATUS_OPTIONS = [
   "Pending",
   "Preparing",
-  "Delivered"
+  "Delivered",
+  "Rejected"
 ];
+
+// Settlement status options
+export const SETTLEMENT_STATUS = {
+  PENDING: "Pending",
+  SCHEDULED: "Scheduled",
+  COLLECTED: "Collected"
+};

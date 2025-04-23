@@ -130,7 +130,7 @@ export function useTourismPlaces() {
 
   const { mutate: updateTourismPlace } = useMutation({
     mutationFn: async ({ id, ...place }: TourismPlace) => {
-      return patch(`/api/tourism/${id}`, place);
+      return authApi.patch(`/api/tourism/${id}`, place);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tourism'] });
@@ -151,7 +151,7 @@ export function useTourismPlaces() {
   const { mutate: deleteTourismPlace } = useMutation({
     mutationFn: async (id: number) => {
       // Use the authenticated API
-      return patch(`/api/tourism/${id}/delete`, {});
+      return authApi.patch(`/api/tourism/${id}/delete`, {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tourism'] });
@@ -225,28 +225,30 @@ export function useOrders(filterBy?: string) {
     }
   });
 
-  // Get the authenticated API functions upfront, not inside the mutation function
-  const { patch } = useAuthenticatedApi();
+  // Get the authenticated API for orders
+  const ordersAuthApi = useAuthenticatedApi();
 
   const { mutate: updateOrderStatus } = useMutation({
     mutationFn: async ({ 
       id, 
       status,
       settled,
-      restaurantPaid 
+      restaurantPaid,
+      settlementAmount
     }: { 
       id: number; 
       status?: string;
       settled?: boolean;
       restaurantPaid?: boolean;
+      settlementAmount?: number;
     }) => {
       const updates: Record<string, any> = {};
       if (status !== undefined) updates.status = status;
       if (settled !== undefined) updates.settled = settled;
       if (restaurantPaid !== undefined) updates.restaurantPaid = restaurantPaid;
-      
+      if (settlementAmount !== undefined) updates.settlementAmount = settlementAmount;
       // Use the authenticated API that we got outside the mutation
-      return patch(`/api/orders/${id}/status`, updates);
+      return ordersAuthApi.patch(`/api/orders/${id}/status`, updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
@@ -258,6 +260,27 @@ export function useOrders(filterBy?: string) {
     onError: (err) => {
       toast({
         title: "Failed to update order",
+        description: err instanceof Error ? err.message : "An error occurred",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Add rejectOrder mutation
+  const { mutate: rejectOrder } = useMutation({
+    mutationFn: async (id: number) => {
+      return ordersAuthApi.patch(`/api/orders/${id}/status`, { status: "Rejected" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      toast({
+        title: "Order rejected",
+        description: "The order has been rejected.",
+      });
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to reject order",
         description: err instanceof Error ? err.message : "An error occurred",
         variant: "destructive",
       });
@@ -286,6 +309,7 @@ export function useOrders(filterBy?: string) {
     error, 
     placeOrder, 
     updateOrderStatus,
+    rejectOrder,
     refetch 
   };
 }

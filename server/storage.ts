@@ -7,9 +7,22 @@ import {
   AdminSetting, InsertAdminSetting
 } from "@shared/schema";
 
+export interface RestaurantPaymentHistory {
+  id: number;
+  timestamp: Date;
+  amount: number;
+  orderIds: number[];
+  invoiceFilename: string;
+}
+
 export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
+
+  // Restaurant payment history methods
+  addRestaurantPaymentHistory(entry: Omit<RestaurantPaymentHistory, 'id'>): Promise<RestaurantPaymentHistory>;
+  getRestaurantPaymentHistory(): Promise<RestaurantPaymentHistory[]>;
+  getRestaurantPaymentHistoryById(id: number): Promise<RestaurantPaymentHistory | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserLastLogin(id: number): Promise<User | undefined>;
@@ -52,13 +65,15 @@ export class MemStorage implements IStorage {
   private orders: Map<number, Order>;
   private tourismPlaces: Map<number, TourismPlace>;
   private adminSettings: Map<string, AdminSetting>;
-  
+  private restaurantPaymentHistory: Map<number, RestaurantPaymentHistory>;
+
   private userCurrentId: number;
   private activityLogCurrentId: number;
   private menuItemCurrentId: number;
   private orderCurrentId: number;
   private tourismPlaceCurrentId: number;
   private adminSettingCurrentId: number;
+  private restaurantPaymentHistoryCurrentId: number;
 
   constructor() {
     this.users = new Map();
@@ -67,6 +82,7 @@ export class MemStorage implements IStorage {
     this.orders = new Map();
     this.tourismPlaces = new Map();
     this.adminSettings = new Map();
+    this.restaurantPaymentHistory = new Map();
     
     this.userCurrentId = 1;
     this.activityLogCurrentId = 1;
@@ -74,6 +90,7 @@ export class MemStorage implements IStorage {
     this.orderCurrentId = 1;
     this.tourismPlaceCurrentId = 1;
     this.adminSettingCurrentId = 1;
+    this.restaurantPaymentHistoryCurrentId = 1;
     
     // Initialize with some sample data
     this.initializeData();
@@ -391,6 +408,26 @@ export class MemStorage implements IStorage {
     const adminSetting: AdminSetting = { ...setting, id };
     this.adminSettings.set(setting.key, adminSetting);
     return adminSetting;
+  }
+
+  // Restaurant payment history methods
+  async addRestaurantPaymentHistory(entry: Omit<RestaurantPaymentHistory, 'id'>): Promise<RestaurantPaymentHistory> {
+    const id = this.restaurantPaymentHistoryCurrentId++;
+    const record: RestaurantPaymentHistory = { ...entry, id };
+    this.restaurantPaymentHistory.set(id, record);
+    
+    // Log the activity
+    console.log(`Added restaurant payment history: ${JSON.stringify(record)}`);
+    
+    return record;
+  }
+
+  async getRestaurantPaymentHistory(): Promise<RestaurantPaymentHistory[]> {
+    return Array.from(this.restaurantPaymentHistory.values()).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }
+
+  async getRestaurantPaymentHistoryById(id: number): Promise<RestaurantPaymentHistory | undefined> {
+    return this.restaurantPaymentHistory.get(id);
   }
 }
 

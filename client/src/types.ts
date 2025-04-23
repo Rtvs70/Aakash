@@ -43,6 +43,7 @@ export interface Order {
   total: number;
   settled: boolean;
   restaurantPaid: boolean;
+  settlementAmount?: number;
 }
 
 // Admin User Types
@@ -50,6 +51,7 @@ export interface AdminUser {
   id: number;
   username: string;
   isAdmin: boolean;
+  isSuperAdmin?: boolean;
   lastLogin: string | null;
 }
 

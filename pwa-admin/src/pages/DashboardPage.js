@@ -17,7 +17,6 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { useWebSocket } from '../hooks/useWebSocket';
 import { useApi } from '../hooks/useApi';
 
 export default function DashboardPage() {
@@ -31,33 +30,6 @@ export default function DashboardPage() {
   const [deliveredCount, setDeliveredCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const { get } = useApi();
-
-  // Setup WebSocket connection for real-time updates
-  const { isConnected } = useWebSocket({
-    onNewOrder: (order) => {
-      // Play notification sound
-      playNotificationSound();
-      
-      // Add the new order to the state
-      setOrders(prevOrders => [order, ...prevOrders]);
-      
-      // Update counts
-      if (order.status === 'Pending') {
-        setPendingCount(count => count + 1);
-      }
-    },
-    onOrderStatusUpdate: (updatedOrder) => {
-      // Update the order in the state
-      setOrders(prevOrders => prevOrders.map(order => 
-        order.id === updatedOrder.id ? updatedOrder : order
-      ));
-      
-      // Update counts based on status changes
-      updateCounts(orders.map(order => 
-        order.id === updatedOrder.id ? updatedOrder : order
-      ));
-    }
-  });
 
   // Fetch orders on component mount
   useEffect(() => {
@@ -205,9 +177,9 @@ export default function DashboardPage() {
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Chip 
-              color={isConnected ? 'success' : 'error'} 
+              color="success" 
               size="small" 
-              label={isConnected ? 'Online' : 'Offline'}
+              label="Online"
               sx={{ mr: 2 }}
             />
             <IconButton color="inherit" onClick={() => handleNavigate('/settings')}>
@@ -314,7 +286,6 @@ export default function DashboardPage() {
                         variant="outlined" 
                         color="primary"
                         size="small"
-                        disabled
                         sx={{ mt: 2 }}
                       >
                         All Time

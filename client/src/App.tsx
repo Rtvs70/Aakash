@@ -15,7 +15,7 @@ import { CartProvider } from "@/hooks/use-cart";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { LanguageProvider } from "@/hooks/use-language";
 import { AuthProvider } from "@/hooks/use-auth";
-import { WebSocketProvider } from "@/hooks/use-websocket-context";
+import { ToastProvider } from "@radix-ui/react-toast";
 
 function Router() {
   return (
@@ -35,12 +35,10 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <LanguageProvider>
-          <AuthProvider>
-            <WebSocketProvider 
-              showToasts={false} // Only show toasts in specific components that need them
-            >
+      <ToastProvider>
+        <ThemeProvider>
+          <LanguageProvider>
+            <AuthProvider>
               <CartProvider>
                 <div className="flex flex-col min-h-screen">
                   <Header />
@@ -51,10 +49,10 @@ function App() {
                 </div>
                 <Toaster />
               </CartProvider>
-            </WebSocketProvider>
-          </AuthProvider>
-        </LanguageProvider>
-      </ThemeProvider>
+            </AuthProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

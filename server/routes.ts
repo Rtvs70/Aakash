@@ -11,6 +11,9 @@ import {
   insertAdminSettingSchema 
 } from "@shared/schema";
 import { z } from "zod";
+import fs from "fs";
+import path from "path";
+import PDFDocument from "pdfkit";
 
 // Middleware to verify admin authentication
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -311,6 +314,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to update order status" });
     }
   });
+
+  // API route for marking restaurant orders as paid and generating invoice
+  app.post("/api/restaurant-payments", requireAuth, async (req, res) => {
+    try {
+      // Ensure invoices directory exists
+      const invoicesDir = path.join(process.cwd(), "server", "invoices");
+      if (!fs.existsSync(invoicesDir)) {
+        fs.mkdirSync(invoicesDir, { recursive: true });
+      }
+
+      // Get all unpaid restaurant orders
+      const allOrders = await storage.getOrders();
+      const unpaidOrders = allOrders.filter(order => !order.restaurantPaid);
+
+      if (unpaidOrders.length === 0) {
+        return res.status(400).json({ message: "No unpaid restaurant orders found" });
+      }
+
+      // Calculate total amount
+      let totalAmount = 0;
+      const orderIds: number[] = [];
+
+      // Generate PDF invoice
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const invoiceFilename = `restaurant-invoice-${timestamp}.pdf`;
+      const invoicePath = path.join(invoicesDir, invoiceFilename);
+
+      const doc = new PDFDocument({ margin: 50 });
+      const writeStream = fs.createWriteStream(invoicePath);
+      doc.pipe(writeStream);
+
+      // Add invoice header
+      doc.fontSize(20).text('Rai Guest House', { align: 'center' });
+      doc.fontSize(16).text('Restaurant Payment Invoice', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).text(`Date: ${new Date().toLocaleDateString()}`, { align: 'right' });
+      doc.fontSize(12).text(`Invoice #: INV-${timestamp}`, { align: 'right' });
+      doc.moveDown();
+
+      // Add order details table
+      doc.fontSize(14).text('Order Details', { underline: true });
+      doc.moveDown();
+
+      // Table headers
+      const tableTop = doc.y;
+      const tableHeaders = ['Order ID', 'Date', 'Items', 'Amount'];
+      const columnWidth = (doc.page.width - 100) / tableHeaders.length;
+
+      // Draw headers
+      tableHeaders.forEach((header, i) => {
+        doc.fontSize(10).text(header, 50 + (i * columnWidth), tableTop, { width: columnWidth, align: 'left' });
+      });
+
+      // Draw a line
+      doc.moveTo(50, tableTop + 20).lineTo(doc.page.width - 50, tableTop + 20).stroke();
+
+      // Add order rows
+      let tableRow = tableTop + 30;
+
+      for (const order of unpaidOrders) {
+        orderIds.push(order.id);
+
+        // Calculate purchase cost for this order
+        let orderPurchaseTotal = 0;
+        (order.items as Array<{ purchasePrice?: number; quantity: number }> | undefined)?.forEach((item) => {
+          orderPurchaseTotal += (item.purchasePrice || 0) * item.quantity;
+        });
+
+        totalAmount += orderPurchaseTotal;
+
+        // Format order date
+        const orderDate = new Date(order.timestamp).toLocaleDateString();
+
+        // Format items summary
+        const itemsSummary = (order.items as Array<{ name: string; quantity: number }> | undefined)?.map(item => `${item.name} x${item.quantity}`).join(', ') || '';
+
+        // Add row to table
+        doc.fontSize(9).text(order.id.toString(), 50, tableRow, { width: columnWidth, align: 'left' });
+        doc.fontSize(9).text(orderDate, 50 + columnWidth, tableRow, { width: columnWidth, align: 'left' });
+        doc.fontSize(9).text(itemsSummary, 50 + (2 * columnWidth), tableRow, { width: columnWidth, align: 'left' });
+        doc.fontSize(9).text(`₹${orderPurchaseTotal.toFixed(2)}`, 50 + (3 * columnWidth), tableRow, { width: columnWidth, align: 'left' });
+
+        tableRow += 30;
+
+        // Add a new page if we're near the bottom
+        if (tableRow > doc.page.height - 100) {
+          doc.addPage();
+          tableRow = 50;
+        }
+      }
+
+      // Draw a line
+      doc.moveTo(50, tableRow).lineTo(doc.page.width - 50, tableRow).stroke();
+
+      // Add total
+      doc.fontSize(12).text('Total Amount:', 50 + (2 * columnWidth), tableRow + 20, { width: columnWidth, align: 'right' });
+      doc.fontSize(12).text(`₹${totalAmount.toFixed(2)}`, 50 + (3 * columnWidth), tableRow + 20, { width: columnWidth, align: 'left' });
+
+      // Add signature section
+      doc.moveDown(4);
+      doc.fontSize(10).text('Authorized Signature: _______________________', { align: 'right' });
+
+      // Finalize PDF
+      doc.end();
+
+      // Wait for the PDF to be fully written
+      await new Promise<void>((resolve, reject) => {
+        writeStream.on('finish', () => resolve());
+        writeStream.on('error', reject);
+      });
+
+      // Mark all orders as paid
+      for (const orderId of orderIds) {
+        await storage.updateOrderStatus(orderId, { restaurantPaid: true });
+      }
+
+      // Record this transaction in restaurant payment history
+      const paymentRecord = await storage.addRestaurantPaymentHistory({
+        timestamp: new Date(),
+        amount: totalAmount,
+        orderIds,
+        invoiceFilename
+      });
+
+      // Log the activity
+      await storage.logActivity({
+        userId: (req as any).userId,
+        action: "RESTAURANT_PAYMENT",
+        details: `Marked ${orderIds.length} orders as paid to restaurant. Total: ₹${totalAmount.toFixed(2)}`
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `${orderIds.length} orders marked as paid to restaurant`,
+        paymentRecord,
+        invoiceUrl: `/api/invoices/${invoiceFilename}`
+      });
+    } catch (error) {
+      console.error('Error processing restaurant payment:', error);
+      res.status(500).json({ message: "Failed to process restaurant payment" });
+    }
+  });
+
+  // API route to get restaurant payment history
+  app.get("/api/restaurant-payments", requireAuth, async (req, res) => {
+    try {
+      const history = await storage.getRestaurantPaymentHistory();
+      res.json(history);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch restaurant payment history" });
+    }
+  });
+
+  // API route to get a specific invoice
+  app.get("/api/invoices/:filename", requireAuth, async (req, res) => {
+    try {
+      const filename = req.params.filename;
+      const invoicePath = path.join(process.cwd(), "server", "invoices", filename);
+
+      if (!fs.existsSync(invoicePath)) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      fs.createReadStream(invoicePath).pipe(res);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to retrieve invoice" });
+    }
+  });
   
   // API routes for tourism places
   app.get("/api/tourism", async (req, res) => {
@@ -437,6 +610,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
   // Set up WebSocket server for real-time notifications
+  // Load notification interval settings from database or use defaults
+  let pendingOrderAlertInterval = 60000; // Default: 1 minute
+  let preparingOrderAlertInterval = 300000; // Default: 5 minutes
+  
+  // Load settings from database
+  storage.getAdminSetting("pendingOrderAlertInterval").then(setting => {
+    if (setting) {
+      pendingOrderAlertInterval = parseInt(setting.value);
+    }
+  });
+  
+  storage.getAdminSetting("preparingOrderAlertInterval").then(setting => {
+    if (setting) {
+      preparingOrderAlertInterval = parseInt(setting.value);
+    }
+  });
   const wss = new WebSocketServer({ 
     server: httpServer, 
     path: '/ws',

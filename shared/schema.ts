@@ -8,6 +8,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   isAdmin: boolean("is_admin").default(true),
+  isSuperAdmin: boolean("is_super_admin").default(false),
   lastLogin: timestamp("last_login"),
 });
 
@@ -43,6 +44,8 @@ export const orders = pgTable("orders", {
   total: integer("total").notNull(),
   settled: boolean("settled").default(false),
   restaurantPaid: boolean("restaurant_paid").default(false),
+  rejectionTimestamp: timestamp("rejection_timestamp"),
+  rejectionReason: text("rejection_reason"),
 });
 
 // Tourism Places Schema
@@ -100,6 +103,8 @@ export const insertOrderSchema = createInsertSchema(orders)
     })),
     settled: z.boolean().optional().default(false),
     restaurantPaid: z.boolean().optional().default(false),
+    rejectionTimestamp: z.date().optional(),
+    rejectionReason: z.string().optional(),
   });
 
 export const insertTourismPlaceSchema = createInsertSchema(tourismPlaces).pick({
@@ -134,3 +139,9 @@ export type TourismPlace = typeof tourismPlaces.$inferSelect;
 
 export type InsertAdminSetting = z.infer<typeof insertAdminSettingSchema>;
 export type AdminSetting = typeof adminSettings.$inferSelect;
+
+// Extended types for client-side use
+export interface NotificationSettings {
+  pendingOrderAlertInterval: number; // in milliseconds
+  preparingOrderAlertInterval: number; // in milliseconds
+}

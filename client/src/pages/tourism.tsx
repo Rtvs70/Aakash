@@ -201,9 +201,11 @@ export default function Tourism() {
                         </div>
                       ) : (
                         <div className="flex justify-center items-center py-6 bg-gray-100 dark:bg-gray-800 rounded-md mb-6">
-                          <p className="text-gray-500 dark:text-gray-400">
-                            {t('tourism.noPhotosAvailable')}
-                          </p>
+                          <img 
+                            src="/fallback-logo.png" 
+                            alt="Rai Guest House" 
+                            className="object-cover rounded-md max-h-[200px] w-auto"
+                          />
                         </div>
                       )}
                       
@@ -254,12 +256,24 @@ export default function Tourism() {
                   </div>
                   
                   <div className="flex gap-2 mt-4">
-                    {place.photoLinks && place.photoLinks.length > 0 && (
+                    {place.photoLinks && place.photoLinks.length > 0 ? (
                       <Button
                         variant="outline"
                         className="flex-1"
                         onClick={() => {
                           setSelectedPhotoIndex(0);
+                          const dialogTrigger = document.querySelector(`[data-place-id="${place.id}"]`) as HTMLElement;
+                          if (dialogTrigger) dialogTrigger.click();
+                        }}
+                      >
+                        <ImageIcon className="h-4 w-4 mr-2" />
+                        {t('tourism.viewPhotos')}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
                           const dialogTrigger = document.querySelector(`[data-place-id="${place.id}"]`) as HTMLElement;
                           if (dialogTrigger) dialogTrigger.click();
                         }}
